@@ -56,23 +56,23 @@ OUTPUT_SHAPE = (64, 128)
 CHARS = common.CHARS + " "
 
 
-def make_char_ims(font_path, output_height):
+def make_char_ims(font_path, output_height):  		#output_height=32
     font_size = output_height * 4
 
-    font = ImageFont.truetype(font_path, font_size)
+    font = ImageFont.truetype(font_path, font_size)	#构造truetype字体
 
-    height = max(font.getsize(c)[1] for c in CHARS)
+    height = max(font.getsize(c)[1] for c in CHARS)	#不同字符的高度不同，这里取最高的那个作为标准高度
 
-    for c in CHARS:
+    for c in CHARS:		
         width = font.getsize(c)[0]
-        im = Image.new("RGBA", (width, height), (0, 0, 0))
+        im = Image.new("RGBA", (width, height), (0, 0, 0)) #构造一个字符高度宽度的图像，白色(0,0,0)填充
 
         draw = ImageDraw.Draw(im)
-        draw.text((0, 0), c, (255, 255, 255), font=font)
-        scale = float(output_height) / height
+        draw.text((0, 0), c, (255, 255, 255), font=font)#在(0,0)位置绘制字符，黑色(255,255,255,255)，指定字体
+        scale = float(output_height) / height		#按照输出大小缩放图像，按高度比例缩放宽度
         im = im.resize((int(width * scale), output_height), Image.ANTIALIAS)
-        yield c, numpy.array(im)[:, :, 0].astype(numpy.float32) / 255.
-
+        yield c, numpy.array(im)[:, :, 0].astype(numpy.float32) / 255.  #这里绘制的字体图像，是像素点的二维数组，每个像素点是一个一维数组，总共3维数组
+									#返回值[:,:,0]的意思，是取所有像素点的第一[0]个通道/红色通道的值，除以255返回，实际上是灰度值
 
 def euler_to_mat(yaw, pitch, roll):
     # Rotate clockwise about the Y-axis
@@ -184,19 +184,19 @@ def rounded_rect(shape, radius):
 
 
 def generate_plate(font_height, char_ims):
-    h_padding = random.uniform(0.2, 0.4) * font_height
-    v_padding = random.uniform(0.1, 0.3) * font_height
-    spacing = font_height * random.uniform(-0.05, 0.05)
+    h_padding = random.uniform(0.2, 0.4) * font_height  #x方向左/右空出的幅度
+    v_padding = random.uniform(0.1, 0.3) * font_height  #y方向上/下空出的幅度
+    spacing = font_height * random.uniform(-0.05, 0.05) #字符之间的空间
     radius = 1 + int(font_height * 0.1 * random.random())
 
     code = generate_code()
     text_width = sum(char_ims[c].shape[1] for c in code)
     text_width += (len(code) - 1) * spacing
 
-    out_shape = (int(font_height + v_padding * 2),
+    out_shape = (int(font_height + v_padding * 2),		#在牌号字符串尺寸外，高度和宽度额外扩张的尺寸
                  int(text_width + h_padding * 2))
 
-    text_color, plate_color = pick_colors()
+    text_color, plate_color = pick_colors()             #plate-color大于text-color 0.3以上
     
     text_mask = numpy.zeros(out_shape)
     
@@ -205,11 +205,11 @@ def generate_plate(font_height, char_ims):
     for c in code:
         char_im = char_ims[c]
         ix, iy = int(x), int(y)
-        text_mask[iy:iy + char_im.shape[0], ix:ix + char_im.shape[1]] = char_im
-        x += char_im.shape[1] + spacing
+        text_mask[iy:iy + char_im.shape[0], ix:ix + char_im.shape[1]] = char_im	#灰度图像，二维数组，y方向，x方向每个字符右偏移字符宽度+spacing,
+        x += char_im.shape[1] + spacing                                 #字符区域色值为1，非字符区域为0
 
-    plate = (numpy.ones(out_shape) * plate_color * (1. - text_mask) +
-             numpy.ones(out_shape) * text_color * text_mask)
+    plate = (numpy.ones(out_shape) * plate_color * (1. - text_mask) +           #面板区域值为色值(1)*1，该区域text_mask为0
+             numpy.ones(out_shape) * text_color * text_mask)                    #字符区域值为色值(1)*text-color
 
     return plate, rounded_rect(out_shape, radius), code.replace(" ", "")
 
@@ -217,21 +217,21 @@ def generate_plate(font_height, char_ims):
 def generate_bg(num_bg_images):
     found = False
     while not found:
-        fname = "bgs/{:08d}.jpg".format(random.randint(0, num_bg_images - 1))
-        bg = cv2.imread(fname, cv2.CV_LOAD_IMAGE_GRAYSCALE) / 255.
-        if (bg.shape[1] >= OUTPUT_SHAPE[1] and
+        fname = "bgs/{:08d}.jpg".format(random.randint(0, num_bg_images - 1))	#随机选择一个背景图
+        bg = cv2.imread(fname, cv2.CV_LOAD_IMAGE_GRAYSCALE) / 255.		#读入灰度值图像，将各像素点值除以255
+        if (bg.shape[1] >= OUTPUT_SHAPE[1] and					#选择一个大于输出尺寸的背景图(128*64)
             bg.shape[0] >= OUTPUT_SHAPE[0]):
             found = True
 
-    x = random.randint(0, bg.shape[1] - OUTPUT_SHAPE[1])
+    x = random.randint(0, bg.shape[1] - OUTPUT_SHAPE[1])			#选择一个有效随机点
     y = random.randint(0, bg.shape[0] - OUTPUT_SHAPE[0])
-    bg = bg[y:y + OUTPUT_SHAPE[0], x:x + OUTPUT_SHAPE[1]]
+    bg = bg[y:y + OUTPUT_SHAPE[0], x:x + OUTPUT_SHAPE[1]]			#选取一块128*64区域
 
     return bg
 
 
-def generate_im(char_ims, num_bg_images):
-    bg = generate_bg(num_bg_images)
+def generate_im(char_ims, num_bg_images):                           #char_ims是A-Z,0-9字符的色值/255
+    bg = generate_bg(num_bg_images)                                 #128*64灰度图像
 
     plate, plate_mask, code = generate_plate(FONT_HEIGHT, char_ims)
     
@@ -256,14 +256,14 @@ def generate_im(char_ims, num_bg_images):
     return out, code, not out_of_bounds
 
 
-def load_fonts(folder_path):
+def load_fonts(folder_path):			#返回字符，以及字符的红色通道值除以255
     font_char_ims = {}
     fonts = [f for f in os.listdir(folder_path) if f.endswith('.ttf')]
     for font in fonts:
         font_char_ims[font] = dict(make_char_ims(os.path.join(folder_path,
                                                               font),
                                                  FONT_HEIGHT))
-    return fonts, font_char_ims
+    return fonts, font_char_ims			#fonts='UKNumberPlate.ttf'
 
 
 def generate_ims():
@@ -275,8 +275,8 @@ def generate_ims():
 
     """
     variation = 1.0
-    fonts, font_char_ims = load_fonts(FONT_DIR)
-    num_bg_images = len(os.listdir("bgs"))
+    fonts, font_char_ims = load_fonts(FONT_DIR)	#返回字符，以及字符的红色通道值除以255
+    num_bg_images = len(os.listdir("bgs"))  	#背景图片数
     while True:
         yield generate_im(font_char_ims[random.choice(fonts)], num_bg_images)
 
